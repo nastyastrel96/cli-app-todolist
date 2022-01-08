@@ -30,9 +30,7 @@ public class ToDoItemFileRepository implements ToDoItemRepository {
     public List<ToDoItem> findAll() {
         List<ToDoItem> toDoItemList = new ArrayList<>();
         List<CsvTodo> csvTodoList = csvToBean();
-        for (CsvTodo csvTodo : csvTodoList) {
-            toDoItemList.add(new ToDoItem(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber()));
-        }
+        csvTodoList.forEach(csvTodo -> toDoItemList.add(new ToDoItem(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber())));
         return toDoItemList;
     }
 
@@ -43,17 +41,12 @@ public class ToDoItemFileRepository implements ToDoItemRepository {
                     .withType(CsvTodo.class)
                     .withIgnoreLeadingWhiteSpace(true)
                     .build();
-
-            for (CsvTodo csvTodo : csvToBean) {
-                list.add(new CsvTodo(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber()));
-            }
-
+            csvToBean.forEach(csvTodo -> list.add(new CsvTodo(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber())));
         } catch (IOException ex) {
             ex.printStackTrace();
         }
         return list;
     }
-
 
     @Override
     public void save(ToDoItem item) {
@@ -69,42 +62,34 @@ public class ToDoItemFileRepository implements ToDoItemRepository {
     @Override
     public ToDoItem changeTodoStateToDone(int serialNumber) {
         List<CsvTodo> csvTodoList = csvToBean();
-        ToDoItem item = null;
-        for (CsvTodo csvTodo : csvTodoList) {
-            if (csvTodo.getSerialNumber() == serialNumber) {
-                csvTodo.setState(TaskState.DONE);
-                item = new ToDoItem(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber());
-            }
-        }
-        writeUndoneToDone(csvTodoList);
-        return item;
+        return csvTodoList.stream().filter(csvTodo -> csvTodo.getSerialNumber() == serialNumber).findFirst().map(csvTodo -> {
+            csvTodo.setState(TaskState.DONE);
+            writeUndoneToDone(csvTodoList);
+            return new ToDoItem(csvTodo.getState(), csvTodo.getDescription(), csvTodo.getCreationDate(), csvTodo.getSerialNumber());
+        }).orElse(null);
     }
 
     private void writeUndoneToDone(List<CsvTodo> list) {
         createWriterForCsvTodo(list);
     }
 
+    private void writeToFile(ToDoItem item) {
+        List<ToDoItem> toDoItemList = findAll();
+        List<CsvTodo> csvTodoList = new ArrayList<>();
+        toDoItemList.forEach(toDoItem -> csvTodoList.add(CsvTodo.fromToDoItem(toDoItem)));
+        CsvTodo csvTodoForAdding = CsvTodo.fromToDoItem(item);
+        csvTodoForAdding.setSerialNumber(csvTodoList.size() + 1);
+        csvTodoList.add(csvTodoForAdding);
+        createWriterForCsvTodo(csvTodoList);
+    }
+
     private void createWriterForCsvTodo(List<CsvTodo> list) {
         try (CSVWriter writer = new CSVWriter(new FileWriter(String.valueOf(filePath), false))) {
             StatefulBeanToCsv<CsvTodo> beanToCsv = new StatefulBeanToCsvBuilder<CsvTodo>(writer).build();
             beanToCsv.write(list);
-
         } catch (IOException | CsvRequiredFieldEmptyException | CsvDataTypeMismatchException ex) {
             throw new RuntimeException("Could not write to .csv file " + filePath.toAbsolutePath());
         }
-    }
-
-    private void writeToFile(ToDoItem item) {
-        List<ToDoItem> toDoItemList = findAll();
-        List<CsvTodo> csvTodoList = new ArrayList<>();
-        for (ToDoItem toDoItem : toDoItemList) {
-            csvTodoList.add(CsvTodo.fromToDoItem(toDoItem));
-        }
-        CsvTodo csvTodoForAdding = CsvTodo.fromToDoItem(item);
-        csvTodoForAdding.setSerialNumber(csvTodoList.size() + 1);
-        csvTodoList.add(csvTodoForAdding);
-
-        createWriterForCsvTodo(csvTodoList);
     }
 
 }
